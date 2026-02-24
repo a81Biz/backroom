@@ -16,3 +16,4 @@ shared/
 shared_data/
 *.exe
 *.log
+functional/
