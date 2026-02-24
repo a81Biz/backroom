@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-display text-slate-900 dark:text-slate-100 bg-background-light dark:bg-background-dark;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+/* Mobile Scanner Specifics */
+.scan-line {
+    background: linear-gradient(90deg, transparent, #0d7ff2, transparent);
+    animation: scan 2s linear infinite;
+}
+@keyframes scan {
+    0% { top: 0%; }
+    100% { top: 100%; }
+}
+.scanner-frame {
+    box-shadow: 0 0 0 1000px rgba(16, 25, 34, 0.6);
+}
+.modal-overlay {
+    background-color: rgba(16, 25, 34, 0.85);
+    backdrop-filter: blur(4px);
+}

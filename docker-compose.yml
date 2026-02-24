@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  # Database Service
+  db:
+    image: postgres:15-alpine
+    container_name: backroom_db
+    restart: always
+    environment:
+      POSTGRES_USER: backroom_user
+      POSTGRES_PASSWORD: backroom_password
+      POSTGRES_DB: backroom_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - backroom-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U backroom_user -d backroom_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Core Backend Service (Go)
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backroom_backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_USER: backroom_user
+      DB_PASSWORD: backroom_password
+      DB_NAME: backroom_db
+      DB_PORT: 5432
+      SHARED_DIR: /app/shared
+    volumes:
+      - shared_data:/app/shared
+    ports:
+      - "8080:8080"
+    networks:
+      - backroom-network
+
+  # Worker Service (Python)
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: backroom_worker
+    restart: always
+    environment:
+      SHARED_DIR: /app/shared
+    volumes:
+      - shared_data:/app/shared
+    networks:
+      - backroom-network
+
+  # Frontend Service (React + Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: backroom_frontend
+    restart: always
+    volumes:
+      - shared_data:/app/shared
+      - ./certs:/etc/nginx/ssl:ro
+    ports:
+      - "3000:80"
+      - "443:443"
+    networks:
+      - backroom-network
+    depends_on:
+      - backend
+
+volumes:
+  pg_data:
+  shared_data:
+
+networks:
+  backroom-network:
+    driver: bridge

@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>The Backroom | Ingest & Inventory Management</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#0d7ff2",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#0a0c10",
+                        "surface-dark": "#161b22",
+                        "border-dark": "#30363d",
+                        "app-dark": "#101922"
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"],
+                        "mono": ["JetBrains Mono", "monospace"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .mono-font { font-family: 'JetBrains Mono', monospace; }
+        .mono-nums { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+        
+        /* Mobile Scanner Specifics */
+        .scan-line {
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #0d7ff2, transparent);
+            animation: scan 2s linear infinite;
+        }
+        @keyframes scan {
+            0% { top: 0%; }
+            100% { top: 100%; }
+        }
+        .scanner-frame {
+            box-shadow: 0 0 0 1000px rgba(16, 25, 34, 0.6);
+        }
+        .modal-overlay {
+            background-color: rgba(16, 25, 34, 0.85);
+            backdrop-filter: blur(4px);
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 antialiased overflow-hidden h-screen">
+    <div id="root"></div>
+
+    <!-- Load Libraries -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/history@5/umd/history.development.js"></script>
+    <script src="https://unpkg.com/react-router@6.3.0/umd/react-router.development.js"></script>
+    <script src="https://unpkg.com/react-router-dom@6.3.0/umd/react-router-dom.development.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const { createRoot } = ReactDOM;
+        const { MemoryRouter, Routes, Route, Link, useNavigate, useLocation } = ReactRouterDOM;
+
+        // --- Shared Components ---
+
+        const NavHeader = ({ activeTab }) => (
+            <header class="flex items-center justify-between border-b border-border-dark px-6 py-3 bg-surface-dark/50 backdrop-blur-md shrink-0">
+                <div class="flex items-center gap-8">
+                    <Link to="/" class="flex items-center gap-3">
+                        <div class="bg-primary p-1.5 rounded-lg">
+                            <span class="material-symbols-outlined text-white text-xl leading-none">database</span>
+                        </div>
+                        <h1 class="text-white text-lg font-bold tracking-tight">The Backroom</h1>
+                    </Link>
+                    <nav class="flex items-center gap-6">
+                        <Link to="/" class={`${activeTab === 'ingest' ? 'text-primary border-b-2 border-primary mt-4 -mb-4' : 'text-slate-400 hover:text-white'} text-sm font-semibold transition-all pb-4`}>Ingest Studio</Link>
+                        <Link to="/inventory" class={`${activeTab === 'inventory' ? 'text-primary border-b-2 border-primary mt-4 -mb-4' : 'text-slate-400 hover:text-white'} text-sm font-semibold transition-all pb-4`}>Inventory</Link>
+                        <Link to="/sync" class={`${activeTab === 'sync' ? 'text-primary border-b-2 border-primary mt-4 -mb-4' : 'text-slate-400 hover:text-white'} text-sm font-semibold transition-all pb-4`}>Sync Hub</Link>
+                        <Link to="/scanner" class="text-slate-400 hover:text-white text-sm font-medium transition-colors">Mobile</Link>
+                    </nav>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="relative flex items-center">
+                        <span class="material-symbols-outlined absolute left-3 text-slate-500 text-lg">search</span>
+                        <input class="bg-surface-dark border-border-dark rounded-lg pl-10 pr-4 py-1.5 text-sm w-64 focus:ring-1 focus:ring-primary focus:border-primary transition-all text-white" placeholder="Search catalogs..." type="text"/>
+                    </div>
+                    <button class="p-2 hover:bg-surface-dark rounded-lg text-slate-400 hover:text-white transition-colors">
+                        <span class="material-symbols-outlined">notifications</span>
+                    </button>
+                    <div class="h-8 w-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center">
+                        <span class="text-primary text-xs font-bold">JD</span>
+                    </div>
+                </div>
+            </header>
+        );
+
+        // --- Screen 1: Ingest Studio ---
+        const IngestStudio = () => {
+            return (
+                <div class="flex flex-col h-screen bg-background-dark">
+                    <NavHeader activeTab="ingest" />
+                    <main class="flex flex-1 overflow-hidden">
+                        <aside class="w-72 border-r border-border-dark flex flex-col bg-surface-dark/20 shrink-0">
+                            <div class="p-4 border-b border-border-dark flex items-center justify-between">
+                                <h2 class="text-xs font-bold uppercase tracking-widest text-slate-500">Source</h2>
+                                <button class="text-primary text-xs font-semibold hover:underline flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-sm">upload</span> New PDF
+                                </button>
+                            </div>
+                            <div class="flex-1 overflow-y-auto p-3 space-y-1">
+                                <div class="p-3 rounded-lg bg-primary/10 border border-primary/30 cursor-pointer">
+                                    <div class="flex items-center gap-3">
+                                        <span class="material-symbols-outlined text-primary">picture_as_pdf</span>
+                                        <div class="min-w-0">
+                                            <p class="text-sm font-medium text-white truncate">Winter 2024 Collection.pdf</p>
+                                            <p class="text-[10px] text-slate-500">14.2 MB • 42 pages</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                {['Magic Sets Rev. 2', 'Vault Draft V1.pdf'].map((item, idx) => (
+                                    <div key={idx} class="p-3 rounded-lg hover:bg-surface-dark border border-transparent cursor-pointer transition-colors group">
+                                        <div class="flex items-center gap-3">
+                                            <span class="material-symbols-outlined text-slate-500 group-hover:text-slate-300">picture_as_pdf</span>
+                                            <div class="min-w-0">
+                                                <p class="text-sm font-medium text-slate-300 truncate">{item}</p>
+                                                <p class="text-[10px] text-slate-500">8.1 MB • 12 pages</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div class="p-4 border-t border-border-dark bg-background-dark/50">
+                                <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Live Preview: Page 12</p>
+                                <div class="relative aspect-[3/4] rounded-lg border border-border-dark overflow-hidden bg-slate-900 shadow-xl group">
+                                    <div class="absolute inset-0 bg-cover bg-center blur-[2px] opacity-60 transition-transform duration-700 group-hover:scale-110" style={{backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuAdLnmm75fS8xAqcYGvw2vTL8SAQVRfWD_HCGBu981GEEIiSjHuKGWE0AnfyQKQNs0sqT7CsNtjkFxzVbkFxKl9FiEi-HoTHq_br7OMZX7-qFLg9kgOskTy3qLmnWJrmMJ8pxNg3YqKyuW7qviL6UfX9qOWar99kDJRmoO5fACe0qYKhZfidyEo_L-zlcC8-G8QgWQ4pnUlFMgithRu90ATs_Jt-NyZSVEFMM8f6u6DiwpB5BcyQYJyTi7rQlC5Fo2ihBLqax72U7s')"}}></div>
+                                    <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+                                    <div class="absolute bottom-3 left-3">
+                                        <span class="px-2 py-0.5 bg-primary rounded text-[10px] font-bold text-white">ACTIVE</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </aside>
+
+                        <section class="flex-1 flex flex-col bg-background-dark min-w-0">
+                            <div class="p-4 border-b border-border-dark flex items-center justify-between shrink-0">
+                                <div class="flex items-center gap-3">
+                                    <h2 class="text-base font-bold text-white">The Miner</h2>
+                                    <span class="px-2 py-0.5 bg-surface-dark border border-border-dark rounded-full text-[10px] text-slate-400 font-mono">32 EXTRACTIONS</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button class="px-3 py-1.5 bg-surface-dark hover:bg-slate-800 rounded-lg text-xs font-medium text-slate-300 flex items-center gap-2 transition-colors border border-border-dark">
+                                        <span class="material-symbols-outlined text-sm">filter_list</span> Filter
+                                    </button>
+                                    <button class="px-3 py-1.5 bg-primary hover:bg-primary/90 rounded-lg text-xs font-bold text-white flex items-center gap-2 transition-colors">
+                                        <span class="material-symbols-outlined text-sm">bolt</span> Auto-Process
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="flex-1 overflow-y-auto p-6">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                    {[
+                                        { id: '0822-A', title: 'Vintage Holo Series 1', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBplJoi3ksCvIK1vQuCyoAKASlmihkIKnu2X_cdx2U_eL5IZ_V6KmlZtDTK9MTavL4KgUMEwfQKR_zWyrohQBzzhFIbuAVParEu2ueiE38eaNIS3wzVZQy-Y3eRwexXidX7gn9o3vuLgzSLjjD4-lPZmfKEJEcphXoaMARRaQq5vcGSqAdCgob8W51vkf3JrmrlhNCkuqHvk-JvD7NoxUhnvCY4bnd3v1rzq7EbVEcJyBjDzqLzxSLaIDFJ1uvYKbFgfXp5wtXCuvE', status: 'Auto-matched', color: 'emerald' },
+                                        { id: '0822-B', title: 'Unknown Artifact #4', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC0sfM9ovRze0yByzKoeF331ulGM2WKEd0wQ1aPjuks9cmnNhj9e3ctMwWpb1DG7PKhP980Ey-WENUi2RVPbif7xKwHu-dbwGQeIUlY3VPXvtfOiABZcSNSE_4W1Q1BwEJ441SzhophmZXkuQgWjOFNN_NkDiFofAGo6JzW_FVL_qp9l1V5nR6jSPg7Qdjzk5mXCES2W0dqgsL9LNbRUTZ6sp8Z4GMozctbE7cHjX4SgE2nQj5eSsbrXQ3z9rwXyueBh8hDXC81H0Q', status: 'Needs review', color: 'amber' },
+                                        { id: '0823-X', title: 'Prismatic Rare V2', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDmR6HNk6dp9nSNIM9Ib3z5sDdQFtEZ7s7y82DSgDSfpiw5qPTqNm_5QW-sCTnXEBLq01cF9cOR7kcwtuU9H4rImCSEnQSyfj6T5gwfsxJpwko1Enh93kEsS9pdEPs94l-x4NSZ29GanQruBm86WVs5hfxBo9DNrEbkKqE2JEGJrpSq9pNA-8PRD2DqwGCN_5Xu5PBtSFDplB5_EhBxLWzqKLYbjxWY2GMkPGwdQ52pYy_wt3qh0gXr876jCLxWxzlUwYjUWjal4mM', status: 'Auto-matched', color: 'emerald' },
+                                        { id: '0824-L', title: 'Classic Tech Deck', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBCOEfIB7mMg6xRdCHW1Ut6BHyvur5tLQwbpdbwGjfMqq8b9aVt8yIxP50qyku-pZD1-BqGVr4EaSWf6oRDaTkLAPWKaUqHQGMPmyXBgIoRDBMWYsjC2BWXU7IFAFJvxsigoEk1-peNE354_TNxmvuK0J2BwJZLYYDdagXlwRlyl5gpI3dAg4t3-d5RQXyXnmC4lno4-pi0ZBZ-dR1kQ9pL2g9we_vbswiJ54ZYMLvUeekaxPxH20q-IrfSTnYrePvJ3HqwzO4ZIOw', status: 'Needs review', color: 'amber' }
+                                    ].map((card, idx) => (
+                                        <div key={idx} class={`group relative bg-surface-dark border ${card.color === 'emerald' ? 'border-primary/40 hover:shadow-[0_0_20px_rgba(13,127,242,0.15)]' : 'border-amber-500/40 hover:shadow-[0_0_20px_rgba(245,158,11,0.15)]'} rounded-xl overflow-hidden cursor-pointer transition-all`}>
+                                            <div class="aspect-square relative bg-black">
+                                                <img src={card.img} class={`w-full h-full object-cover ${card.color === 'emerald' ? 'opacity-80' : 'opacity-60 grayscale group-hover:grayscale-0'} group-hover:opacity-100 transition-all`} />
+                                                <div class="absolute top-2 right-2">
+                                                    <span class={`bg-${card.color}-500${card.color === 'emerald' ? '/90' : ''} text-${card.color === 'emerald' ? 'white' : 'black'} text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-lg`}>
+                                                        <span class="material-symbols-outlined text-xs">{card.color === 'emerald' ? 'check_circle' : 'warning'}</span>
+                                                        {card.status}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div class="p-3">
+                                                <p class="text-xs font-mono text-slate-400 mb-1">CROP_ID: {card.id}</p>
+                                                <p class="text-sm font-semibold text-white truncate">{card.title}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div class="border-2 border-dashed border-border-dark rounded-xl flex flex-col items-center justify-center min-h-[250px] text-slate-600">
+                                        <span class="material-symbols-outlined text-4xl mb-2">more_horiz</span>
+                                        <p class="text-xs font-medium">Scanning more...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <aside class="w-80 border-l border-border-dark flex flex-col bg-surface-dark/40 shrink-0">
+                            <div class="p-4 border-b border-border-dark shrink-0">
+                                <h2 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Data Match Details</h2>
+                                <div class="bg-background-dark rounded-lg p-3 border border-border-dark mb-6">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-[10px] font-mono text-slate-500">MATCH_CONFIDENCE</span>
+                                        <span class="text-[10px] font-mono text-emerald-500">98.2%</span>
+                                    </div>
+                                    <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                                        <div class="bg-emerald-500 h-full w-[98%]"></div>
+                                    </div>
+                                </div>
+                                <div class="space-y-6">
+                                    <div>
+                                        <label class="block text-[11px] font-bold text-slate-500 uppercase mb-2 tracking-wide">Detected Name (OCR)</label>
+                                        <div class="bg-surface-dark border border-border-dark rounded-lg px-3 py-2 text-sm text-slate-300 mono-font">Vintage Holo Series 1</div>
+                                        <p class="text-[10px] text-slate-600 mt-1 italic">Extracted from top-right region of PDF</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-bold text-slate-500 uppercase mb-2 tracking-wide">Matched Excel Price</label>
+                                        <div class="flex items-center gap-2">
+                                            <div class="flex-1 bg-surface-dark border border-emerald-500/30 rounded-lg px-3 py-2 text-base text-emerald-400 mono-font font-semibold">$45.00</div>
+                                            <button class="p-2 bg-surface-dark border border-border-dark rounded-lg text-slate-400 hover:text-white transition-colors">
+                                                <span class="material-symbols-outlined text-sm">link</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-bold text-slate-500 uppercase mb-2 tracking-wide">SKU Input</label>
+                                        <div class="relative">
+                                            <input class="w-full bg-background-dark border border-primary/50 focus:border-primary focus:ring-1 focus:ring-primary rounded-lg px-3 py-2 text-sm text-white mono-font" type="text" defaultValue="VH1-2024-W-001"/>
+                                            <div class="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-[2px] bg-primary animate-pulse"></div>
+                                        </div>
+                                    </div>
+                                    <div class="space-y-2 pt-4">
+                                        <div class="flex items-center gap-2 text-xs text-slate-400">
+                                            <span class="material-symbols-outlined text-sm text-emerald-500">verified</span>
+                                            <span>Dimensions confirmed (2.5" x 3.5")</span>
+                                        </div>
+                                        <div class="flex items-center gap-2 text-xs text-slate-400">
+                                            <span class="material-symbols-outlined text-sm text-emerald-500">verified</span>
+                                            <span>Color profile: CMYK-V3</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-auto p-4 bg-background-dark/80 border-t border-border-dark">
+                                <button class="w-full bg-primary hover:bg-primary/90 text-white font-bold py-3 rounded-xl shadow-[0_4px_20px_rgba(13,127,242,0.3)] flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+                                    Confirm & Sync to Staging <span class="material-symbols-outlined">sync_alt</span>
+                                </button>
+                                <button class="w-full mt-2 text-slate-500 hover:text-slate-300 text-[10px] font-bold uppercase tracking-widest text-center py-2">Discard Result</button>
+                            </div>
+                        </aside>
+                    </main>
+                </div>
+            );
+        };
+
+        // --- Screen 2: Inventory / Purchase Orders ---
+        const InventoryManager = () => {
+            return (
+                <div class="flex flex-col h-screen bg-app-dark overflow-y-auto">
+                    <NavHeader activeTab="inventory" />
+                    <main class="flex-1 px-6 py-8 lg:px-10 max-w-7xl mx-auto w-full">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                            <div class="flex flex-col gap-1 rounded-xl p-6 bg-slate-900 border border-slate-800 shadow-sm">
+                                <div class="flex items-center justify-between text-slate-400">
+                                    <span class="text-sm font-medium">Total Ordered</span>
+                                    <span class="material-symbols-outlined text-primary">shopping_cart</span>
+                                </div>
+                                <p class="mono-nums text-3xl font-bold mt-2">4,521</p>
+                                <div class="mt-2 flex items-center gap-1 text-xs text-emerald-500">
+                                    <span class="material-symbols-outlined text-xs">trending_up</span>
+                                    <span>12% from last month</span>
+                                </div>
+                            </div>
+                            <div class="flex flex-col gap-1 rounded-xl p-6 bg-slate-900 border border-slate-800 shadow-sm">
+                                <div class="flex items-center justify-between text-slate-400">
+                                    <span class="text-sm font-medium">In Transit</span>
+                                    <span class="material-symbols-outlined text-amber-500">local_shipping</span>
+                                </div>
+                                <p class="mono-nums text-3xl font-bold mt-2 text-primary">1,204</p>
+                                <div class="mt-2 flex items-center gap-1 text-xs text-slate-400">
+                                    <span>8 shipments today</span>
+                                </div>
+                            </div>
+                            <div class="flex flex-col gap-1 rounded-xl p-6 bg-slate-900 border border-slate-800 shadow-sm">
+                                <div class="flex items-center justify-between text-slate-400">
+                                    <span class="text-sm font-medium">Received Today</span>
+                                    <span class="material-symbols-outlined text-emerald-500">check_circle</span>
+                                </div>
+                                <p class="mono-nums text-3xl font-bold mt-2">450</p>
+                                <div class="mt-2 flex items-center gap-1 text-xs text-slate-400">
+                                    <span>Target: 500 units</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                            <div>
+                                <h1 class="text-2xl font-bold">Purchase Orders</h1>
+                                <p class="text-sm text-slate-400">Manage and track incoming stock shipments</p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <button class="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 text-sm font-medium hover:bg-slate-700 transition-colors">
+                                    <span class="material-symbols-outlined text-lg">filter_list</span> Filter
+                                </button>
+                                <button class="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20">
+                                    <span class="material-symbols-outlined text-lg">add</span> New Order
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-xl">
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr class="bg-slate-800/50 border-b border-slate-800">
+                                            <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">PO Number</th>
+                                            <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">Supplier</th>
+                                            <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400 text-center">Date</th>
+                                            <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400 text-center">Status</th>
+                                            <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">Progress</th>
+                                            <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-800">
+                                        {[
+                                            { po: '#PO-9921', supplier: 'Wizards of the Coast', date: 'Oct 24, 2023', status: 'In Transit', progress: 50, color: 'primary' },
+                                            { po: '#PO-9922', supplier: 'Hasbro Pulse', date: 'Oct 23, 2023', status: 'Pending', progress: 10, color: 'amber-500' },
+                                            { po: '#PO-9920', supplier: 'Games Workshop', date: 'Oct 22, 2023', status: 'Received', progress: 100, color: 'emerald-500' },
+                                            { po: '#PO-9919', supplier: 'Konami Digital', date: 'Oct 21, 2023', status: 'In Transit', progress: 75, color: 'primary' },
+                                            { po: '#PO-9918', supplier: 'The Pokémon Company', date: 'Oct 20, 2023', status: 'Received', progress: 100, color: 'emerald-500' },
+                                        ].map((row, i) => (
+                                            <tr key={i} class="hover:bg-slate-800/30 transition-colors group">
+                                                <td class="px-6 py-4 whitespace-nowrap"><span class="mono-nums font-bold text-white">{row.po}</span></td>
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <div class="flex items-center gap-2">
+                                                        <div class="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center">
+                                                            <span class="material-symbols-outlined text-xs text-primary">corporate_fare</span>
+                                                        </div>
+                                                        <span class="font-medium">{row.supplier}</span>
+                                                    </div>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-center"><span class="mono-nums text-sm text-slate-400">{row.date}</span></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-center">
+                                                    <span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-${row.color.split('-')[0]}/10 text-${row.color === 'primary' ? 'primary' : row.color} border border-${row.color === 'primary' ? 'primary' : row.color.split('-')[0]}/20`}>
+                                                        {row.status}
+                                                    </span>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap min-w-[200px]">
+                                                    <div class="flex flex-col gap-1.5">
+                                                        <div class="flex justify-between text-[10px] font-bold uppercase tracking-tighter text-slate-400">
+                                                            <span>{row.status === 'Received' ? 'Fulfilled' : 'Progress'}</span>
+                                                            <span class={`mono-nums text-${row.color === 'primary' ? 'primary' : row.color}`}>{row.progress}/100</span>
+                                                        </div>
+                                                        <div class="h-1.5 w-full bg-slate-700 rounded-full overflow-hidden">
+                                                            <div class={`h-full bg-${row.color === 'primary' ? 'primary' : row.color.split('-')[0] + '-500'} rounded-full transition-all duration-500`} style={{width: `${row.progress}%`}}></div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-right">
+                                                    <button class="text-slate-400 hover:text-primary transition-colors">
+                                                        <span class="material-symbols-outlined">more_horiz</span>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="flex items-center justify-between px-6 py-4 bg-slate-800/30 border-t border-slate-800">
+                                <p class="text-xs font-medium text-slate-400">
+                                    Showing <span class="mono-nums text-white font-bold">1 - 5</span> of <span class="mono-nums text-white font-bold">128</span> results
+                                </p>
+                                <div class="flex items-center gap-1">
+                                    <button class="flex h-8 w-8 items-center justify-center rounded border border-slate-700 hover:bg-slate-800 transition-colors">
+                                        <span class="material-symbols-outlined text-sm">chevron_left</span>
+                                    </button>
+                                    <button class="flex h-8 w-8 items-center justify-center rounded bg-primary text-white text-xs font-bold">1</button>
+                                    <button class="flex h-8 w-8 items-center justify-center rounded border border-slate-700 hover:bg-slate-800 transition-colors text-xs font-bold">2</button>
+                                    <button class="flex h-8 w-8 items-center justify-center rounded border border-slate-700 hover:bg-slate-800 transition-colors text-xs font-bold">3</button>
+                                    <span class="px-2 text-slate-400">...</span>
+                                    <button class="flex h-8 w-8 items-center justify-center rounded border border-slate-700 hover:bg-slate-800 transition-colors text-xs font-bold">12</button>
+                                    <button class="flex h-8 w-8 items-center justify-center rounded border border-slate-700 hover:bg-slate-800 transition-colors">
+                                        <span class="material-symbols-outlined text-sm">chevron_right</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                    <div class="fixed bottom-6 right-6 z-50 animate-bounce">
+                        <div class="flex items-center gap-3 rounded-lg bg-white text-slate-900 px-4 py-3 shadow-2xl border border-white/10">
+                            <span class="material-symbols-outlined text-emerald-500">sync</span>
+                            <p class="text-xs font-bold uppercase tracking-wider">Syncing with Central Warehouse...</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Screen 3: Mobile Scanner ---
+        const MobileScanner = () => {
+            const navigate = useNavigate();
+            return (
+                <div class="relative h-screen w-full flex flex-col bg-background-dark overflow-hidden font-display">
+                    <div class="relative h-[60%] w-full overflow-hidden bg-slate-900">
+                        <div class="absolute inset-0 bg-cover bg-center" style={{backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuAiVsr7iT1519xTo7BwNHvYAoGeiixHOU5csK-HSVqpha7UTxHrwC5ndHPUksILbiAjx6zJ0QoDdV_rnCzig2fA8Wpiq3LPi53nr7Hlvvt9r7WaLmHmMjj7_ccj3L6NpzeTVn3qN37NqpdYQUZ70EstX7Kv2r1m2ocvoq7yF54ijpcmKqSTQtnR6jsMrOzmqhU2iNgQiiRwLYSCaK9JxH-Rc9jKCkBKsCu73FiCUAFt3N0ftCKglN41PMNx-Y1DkYukEk9S-qizGKo')"}}></div>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <div class="relative w-72 h-72 border-2 border-primary/30 rounded-xl overflow-hidden scanner-frame">
+                                <div class="absolute left-0 w-full scan-line z-10"></div>
+                                <div class="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-lg"></div>
+                                <div class="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-lg"></div>
+                                <div class="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-lg"></div>
+                                <div class="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-lg"></div>
+                            </div>
+                        </div>
+                        <div class="absolute top-0 left-0 right-0 p-4 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent">
+                            <button onClick={() => navigate(-1)} class="flex items-center justify-center size-12 rounded-full bg-black/30 backdrop-blur-md text-white">
+                                <span class="material-symbols-outlined">arrow_back</span>
+                            </button>
+                            <div class="bg-black/30 backdrop-blur-md px-4 py-2 rounded-full text-white text-sm font-semibold tracking-wide">SCANNER ACTIVE</div>
+                            <button class="flex items-center justify-center size-12 rounded-full bg-black/30 backdrop-blur-md text-white">
+                                <span class="material-symbols-outlined">flashlight_on</span>
+                            </button>
+                        </div>
+                        <div class="absolute bottom-8 left-0 right-0 text-center">
+                            <p class="text-white text-lg font-bold drop-shadow-lg">Scan Barcode or Product</p>
+                            <p class="text-white/70 text-xs mt-1">Center item in the frame</p>
+                        </div>
+                    </div>
+                    <div class="relative h-[40%] w-full bg-[#182634] rounded-t-xl shadow-2xl z-20 flex flex-col">
+                        <div class="flex justify-center p-3">
+                            <div class="w-12 h-1.5 bg-slate-700 rounded-full"></div>
+                        </div>
+                        <div class="px-6 flex-1 overflow-y-auto pb-4">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-xs font-bold uppercase tracking-widest text-primary/80">Last Scanned</h3>
+                                <div class="flex items-center gap-1 text-green-500 font-bold text-xs">
+                                    <span class="material-symbols-outlined text-[16px] leading-none">check_circle</span> Matched to PO #102
+                                </div>
+                            </div>
+                            <div class="flex gap-4 p-4 rounded-xl bg-slate-800/50 border border-slate-700">
+                                <div class="size-20 shrink-0 bg-slate-700 rounded-lg overflow-hidden border border-slate-600">
+                                    <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuBf0s3FaLxVe_m2qgwVi9FmgU9dcQ2urJr43AgeYPhpjympcjKCT3OkhRQSoOUMaY4-gp5a-41NT0koZYSFBSskNb3so9pHkKHDT4UY34RRckNkhKejfgAd1Rcq-cdhu7lqHW7A1IvzLI4RTiC1sskXOOd_1vIVLXLXfvdUahwpBMp7SWn51DRXSZC4rBpVVoIW_5jqtZ5T-DoBoUJtXiPmdyM38KaU0Q_klL9qWOLVo8hmeTnJVw9FTWJnM4GXiU12OPexfWi67tM" class="w-full h-full object-cover" />
+                                </div>
+                                <div class="flex flex-col justify-between py-1">
+                                    <div>
+                                        <h2 class="text-lg font-bold leading-tight">Magic Gathering Booster</h2>
+                                        <p class="text-xs text-slate-400 mt-0.5">SKU: 88201-MTG-L9</p>
+                                    </div>
+                                    <div class="text-sm">
+                                        <span class="text-slate-400">Total expected: </span><span class="font-bold">10 units</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-6">
+                                <div class="flex items-center justify-between mb-2">
+                                    <p class="font-bold text-sm">Received Quantity</p>
+                                    <p class="text-primary font-bold">1 of 10</p>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <button class="flex-1 h-14 bg-slate-800 rounded-xl flex items-center justify-center active:scale-95 transition-transform text-slate-400">
+                                        <span class="material-symbols-outlined text-3xl">remove</span>
+                                    </button>
+                                    <div class="w-24 h-14 flex items-center justify-center bg-slate-900 border border-slate-700 rounded-xl">
+                                        <span class="text-2xl font-black font-mono">01</span>
+                                    </div>
+                                    <button class="flex-1 h-14 bg-primary rounded-xl flex items-center justify-center active:scale-95 transition-transform text-white shadow-lg shadow-primary/30">
+                                        <span class="material-symbols-outlined text-3xl">add</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="p-4 border-t border-slate-700">
+                            <button class="w-full h-14 bg-primary text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors">
+                                <span>CONFIRM & SCAN NEXT</span>
+                                <span class="material-symbols-outlined">arrow_forward</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="border-t border-slate-800 bg-[#182634] px-4 pb-4 pt-2 shrink-0">
+                        <div class="flex gap-2">
+                            <Link to="/" class="flex flex-1 flex-col items-center justify-center gap-1 text-slate-400">
+                                <span class="material-symbols-outlined">home</span>
+                                <p class="text-[10px] font-medium leading-normal tracking-wide">Home</p>
+                            </Link>
+                            <Link to="/inventory" class="flex flex-1 flex-col items-center justify-center gap-1 text-slate-400">
+                                <span class="material-symbols-outlined">inventory_2</span>
+                                <p class="text-[10px] font-medium leading-normal tracking-wide">Inventory</p>
+                            </Link>
+                            <div class="flex flex-1 flex-col items-center justify-center gap-1 text-primary">
+                                <div class="relative">
+                                    <span class="material-symbols-outlined !fill-[1]">qr_code_scanner</span>
+                                    <div class="absolute -top-1 -right-1 size-2 bg-primary rounded-full animate-pulse"></div>
+                                </div>
+                                <p class="text-[10px] font-bold leading-normal tracking-wide">Scanner</p>
+                            </div>
+                            <Link to="/inventory" class="flex flex-1 flex-col items-center justify-center gap-1 text-slate-400">
+                                <span class="material-symbols-outlined">shopping_cart</span>
+                                <p class="text-[10px] font-medium leading-normal tracking-wide">Orders</p>
+                            </Link>
+                            <Link to="/" class="flex flex-1 flex-col items-center justify-center gap-1 text-slate-400">
+                                <span class="material-symbols-outlined">settings</span>
+                                <p class="text-[10px] font-medium leading-normal tracking-wide">Settings</p>
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Screen 4: Sync Hub (Modal View) ---
+        const SyncHub = () => {
+            const navigate = useNavigate();
+            return (
+                <div class="relative flex h-screen w-full flex-col bg-app-dark overflow-hidden">
+                    <NavHeader activeTab="sync" />
+                    {/* Dimmed Background Simulation */}
+                    <div class="flex-1 p-10 space-y-8 opacity-20 grayscale pointer-events-none">
+                        <div class="h-12 w-64 bg-slate-800 rounded"></div>
+                        <div class="grid grid-cols-3 gap-6">
+                            <div class="h-40 bg-slate-800 rounded-xl"></div>
+                            <div class="h-40 bg-slate-800 rounded-xl"></div>
+                            <div class="h-40 bg-slate-800 rounded-xl"></div>
+                        </div>
+                        <div class="h-96 bg-slate-800 rounded-xl w-full"></div>
+                    </div>
+
+                    {/* Modal Content */}
+                    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+                        <div class="bg-[#1a2632] w-full max-w-4xl rounded-xl shadow-2xl border border-slate-700 flex flex-col overflow-hidden">
+                            <div class="px-8 py-6 border-b border-slate-700 flex justify-between items-center">
+                                <div>
+                                    <h1 class="text-2xl font-bold text-white">Sync Hub</h1>
+                                    <p class="text-sm text-slate-400 mt-1">Connect your WooCommerce store with The Backroom inventory.</p>
+                                </div>
+                                <div class="text-right">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                                        Last synced: 2 hours ago
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="p-8 grid grid-cols-1 md:grid-cols-2 gap-6 bg-background-dark/50">
+                                <div class="bg-[#223649] rounded-xl border border-[#2d465e] p-6 shadow-sm flex flex-col h-full">
+                                    <div class="flex items-center gap-3 mb-4">
+                                        <div class="p-2 bg-primary/10 rounded-lg text-primary">
+                                            <span class="material-symbols-outlined">download</span>
+                                        </div>
+                                        <div>
+                                            <h3 class="font-bold text-white">Import from WooCommerce</h3>
+                                            <p class="text-xs text-slate-400">New orders pending ingestion</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex-1 space-y-2 mt-2">
+                                        {['#WC-10293', '#WC-10294', '#WC-10295'].map((order, idx) => (
+                                            <div key={idx} class="flex items-center justify-between p-3 rounded-lg bg-[#101a23] border border-[#2d465e]">
+                                                <div class="flex items-center gap-3">
+                                                    <span class="material-symbols-outlined text-slate-400 text-sm">shopping_cart</span>
+                                                    <span class="text-sm font-medium font-mono text-slate-200">{order}</span>
+                                                </div>
+                                                <span class="text-[10px] uppercase tracking-wider font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded">Pending</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <button class="mt-6 text-xs text-primary font-medium hover:underline flex items-center justify-center gap-1">
+                                        Review all 12 pending orders <span class="material-symbols-outlined text-xs">chevron_right</span>
+                                    </button>
+                                </div>
+                                <div class="bg-[#223649] rounded-xl border border-[#2d465e] p-6 shadow-sm flex flex-col h-full">
+                                    <div class="flex items-center gap-3 mb-4">
+                                        <div class="p-2 bg-primary/10 rounded-lg text-primary">
+                                            <span class="material-symbols-outlined">upload</span>
+                                        </div>
+                                        <div>
+                                            <h3 class="font-bold text-white">Push to WooCommerce</h3>
+                                            <p class="text-xs text-slate-400">Sync local data to storefront</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex-1 flex flex-col justify-center space-y-4">
+                                        <div class="p-4 rounded-xl bg-primary/5 border border-primary/10 flex items-center gap-4">
+                                            <div class="text-primary"><span class="material-symbols-outlined text-3xl">inventory_2</span></div>
+                                            <div>
+                                                <div class="text-2xl font-bold text-white leading-none">50</div>
+                                                <div class="text-sm text-slate-400">New Products ready</div>
+                                            </div>
+                                        </div>
+                                        <div class="p-4 rounded-xl bg-[#101a23] border border-[#2d465e] flex items-center gap-4">
+                                            <div class="text-slate-400"><span class="material-symbols-outlined text-3xl">update</span></div>
+                                            <div>
+                                                <div class="text-2xl font-bold text-white leading-none">15</div>
+                                                <div class="text-sm text-slate-400">Stock updates</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mt-6 flex justify-between items-center text-xs text-slate-400 px-1">
+                                        <span>Target: wc-api-v3</span>
+                                        <span>Auto-sync: Off</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="px-8 py-6 bg-[#1a2632] border-t border-slate-700">
+                                <button class="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-lg flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-lg shadow-primary/20">
+                                    <span class="material-symbols-outlined">sync</span>
+                                    <span class="text-lg">Execute Sync</span>
+                                </button>
+                                <div class="mt-4 flex justify-center">
+                                    <button onClick={() => navigate('/')} class="text-sm text-slate-400 hover:text-slate-200 transition-colors">
+                                        Cancel and return to dashboard
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Main App & Router ---
+        const App = () => {
+            return (
+                <MemoryRouter>
+                    <Routes>
+                        <Route path="/" element={<IngestStudio />} />
+                        <Route path="/inventory" element={<InventoryManager />} />
+                        <Route path="/scanner" element={<MobileScanner />} />
+                        <Route path="/sync" element={<SyncHub />} />
+                    </Routes>
+                </MemoryRouter>
+            );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
