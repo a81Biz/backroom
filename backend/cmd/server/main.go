@@ -35,14 +35,7 @@ func main() {
 	}))
 
 	// 4. Routes
-	r.Route("/api", func(r chi.Router) {
-		r.Post("/ingest/upload", handlers.UploadHandler)
-		r.Post("/ingest/trigger", handlers.TriggerProcessHandler)  // Moves to raw
-		r.Post("/ingest/process", handlers.ProcessManifestHandler) // Returns JSON Preview
-		r.Get("/ingest/files", handlers.GetSourceFilesHandler)
-		r.Post("/ingest/clear", handlers.ClearProductsHandler)
-
-		// Static Files for Manual Cropping (Full Pages)
+	r.Route("/api", func(r chi.Router) { // Static Files for Manual Cropping (Full Pages)
 		// Serve /media/processed/pages from /app/shared/processed/pages
 		// The container WORKDIR is /app.
 		// SHARED_DIR is /app/shared.
@@ -55,16 +48,12 @@ func main() {
 		FileServer(r, "/media", http.Dir("/app/shared/processed"))
 
 		r.Get("/products", handlers.GetProductsHandler)
-		r.Post("/products/sync", handlers.SyncProductHandler)
 
 		// Product Actions
 		r.Post("/products", handlers.CreateProductHandler) // Save from Preview
 		r.Delete("/products/{id}", handlers.DeleteProductHandler)
 		r.Put("/products/{id}", handlers.UpdateProductHandler)
 		r.Put("/products/{id}/recrop", handlers.RecropHandler)
-
-		r.Get("/orders", handlers.GetOrdersHandler)
-		r.Post("/orders", handlers.CreateOrderHandler) // New endpoint for creating orders
 
 		r.Post("/scan/item", handlers.ScanItemHandler)
 
@@ -80,9 +69,6 @@ func main() {
 		r.Get("/inventory", handlers.GetInventoryHandler)
 		r.Get("/orders", handlers.GetOrdersHandler)
 		r.Post("/orders", handlers.CreateOrderHandler)
-
-		// Sync Routes
-		r.Get("/sync/status", handlers.GetSyncStatusHandler)
 	})
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
