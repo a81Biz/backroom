@@ -68,8 +68,8 @@ func main() {
 		// Ingest & Sync Routes
 		r.Post("/ingest/upload", handlers.UploadHandler)
 		r.Get("/ingest/files", handlers.GetSourceFilesHandler)
-		r.Get("/ingest/preview", handlers.ProcessManifestHandler)
-		r.Get("/ingest/trigger", handlers.TriggerProcessHandler)
+		r.Post("/ingest/process", handlers.ProcessManifestHandler)
+		r.Post("/ingest/trigger", handlers.TriggerProcessHandler)
 		r.Post("/ingest/clear", handlers.ClearProductsHandler)
 		r.Get("/sync/status", handlers.GetSyncStatusHandler)
 
