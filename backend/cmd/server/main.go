@@ -65,6 +65,14 @@ func main() {
 		r.Post("/suppliers/preview-excel", handlers.PreviewExcelHandler)
 		r.Post("/suppliers/{id}/catalog", handlers.CatalogUploadHandler)
 
+		// Ingest & Sync Routes
+		r.Post("/ingest/upload", handlers.UploadHandler)
+		r.Get("/ingest/files", handlers.GetSourceFilesHandler)
+		r.Get("/ingest/preview", handlers.ProcessManifestHandler)
+		r.Get("/ingest/trigger", handlers.TriggerProcessHandler)
+		r.Post("/ingest/clear", handlers.ClearProductsHandler)
+		r.Get("/sync/status", handlers.GetSyncStatusHandler)
+
 		// Inventory & Orders
 		r.Get("/inventory", handlers.GetInventoryHandler)
 		r.Get("/orders", handlers.GetOrdersHandler)
