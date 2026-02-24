@@ -4,6 +4,7 @@ import (
 	"backroom/internal/db"
 	"backroom/internal/models"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"strconv"
@@ -171,6 +172,7 @@ func CatalogUploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var products []models.Product
+	productMap := make(map[string]models.Product)
 	brandSet := make(map[string]struct{})
 
 	// Load existing brands
@@ -243,7 +245,7 @@ func CatalogUploadHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		products = append(products, models.Product{
+		productMap[sku] = models.Product{
 			SKU:         sku,
 			Barcode:     barcode,
 			SupplierID:  &supplier.ID,
@@ -253,7 +255,11 @@ func CatalogUploadHandler(w http.ResponseWriter, r *http.Request) {
 			Price:       price,
 			StockOnHand: qty,
 			Status:      models.StatusPending, // PENDING_IMAGE
-		})
+		}
+	}
+
+	for _, p := range productMap {
+		products = append(products, p)
 	}
 
 	if len(products) > 0 {
@@ -266,7 +272,12 @@ func CatalogUploadHandler(w http.ResponseWriter, r *http.Request) {
 		}).Create(&products).Error
 
 		if err != nil {
-			http.Error(w, "Database Error: "+err.Error(), http.StatusInternalServerError)
+			log.Printf("Bulk Upsert Error: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Database Error: " + err.Error(),
+			})
 			return
 		}
 	}
