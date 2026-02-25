@@ -265,7 +265,8 @@ func CreateProductHandler(w http.ResponseWriter, r *http.Request) {
 	// Check by SKU
 	err := db.DB.Where("sku = ?", product.SKU).First(&existing).Error
 
-	if err == nil {
+	switch err {
+	case nil:
 		// --- UPDATE EXISTING ---
 		// If exists, we update fields.
 		// Especially important if it was PENDING_IMAGE (from Excel) and now we have the Image (from PDF)
@@ -292,7 +293,7 @@ func CreateProductHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(existing)
 		return
 
-	} else if err == gorm.ErrRecordNotFound {
+	case gorm.ErrRecordNotFound:
 		// --- CREATE NEW ---
 		product.ID = uuid.New()
 		product.Status = "APPROVED"
@@ -307,7 +308,7 @@ func CreateProductHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(product)
 		return
 
-	} else {
+	default:
 		// DB Error
 		http.Error(w, "Database error checking SKU: "+err.Error(), http.StatusInternalServerError)
 		return
