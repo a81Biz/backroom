@@ -185,8 +185,31 @@ func CatalogUploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	startRow := mapping.HeaderRow + 1
+
+	// Find the maximum index we need to access
+	maxCols := mapping.ColSKU
+	if mapping.ColTitle > maxCols {
+		maxCols = mapping.ColTitle
+	}
+	if mapping.ColPrice > maxCols {
+		maxCols = mapping.ColPrice
+	}
+	if mapping.ColBrand > maxCols {
+		maxCols = mapping.ColBrand
+	}
+	if mapping.ColBarcode > maxCols {
+		maxCols = mapping.ColBarcode
+	}
+	// mapping.ColQty is ignored now, so we don't strictly need it to be padded
+
 	for i := startRow; i < len(rows); i++ {
 		row := rows[i]
+
+		// Pad row if Excel truncated empty trailing columns
+		for len(row) <= maxCols {
+			row = append(row, "")
+		}
+
 		if mapping.ColSKU >= len(row) {
 			continue
 		}
@@ -206,13 +229,7 @@ func CatalogUploadHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Parse Qty
-		qty := 0
-		if mapping.ColQty < len(row) {
-			if val, err := strconv.Atoi(strings.TrimSpace(row[mapping.ColQty])); err == nil {
-				qty = val
-			}
-		}
+		// Qty is no longer parsed here; SOH is managed by Purchase Orders.
 
 		// Brand
 		brand := ""
@@ -253,7 +270,7 @@ func CatalogUploadHandler(w http.ResponseWriter, r *http.Request) {
 			Description: "", // No mapping yet
 			Brand:       brand,
 			Price:       price,
-			StockOnHand: qty,
+			StockOnHand: 0,                    // SOH should only be filled by Purchase Orders
 			Status:      models.StatusPending, // PENDING_IMAGE
 		}
 	}
@@ -264,11 +281,11 @@ func CatalogUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	if len(products) > 0 {
 		// Bulk UPSERT
-		// Update: Title, Description, Brand, Price, StockOnHand.
-		// Ignore: Status, ImagePath (preserve)
+		// Update: Title, Description, Brand, Price.
+		// Ignore: Status, ImagePath, StockOnHand (preserve existing stock from Purchase Orders)
 		err := db.DB.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "sku"}},
-			DoUpdates: clause.AssignmentColumns([]string{"barcode", "title", "brand", "price", "stock_on_hand", "updated_at"}),
+			DoUpdates: clause.AssignmentColumns([]string{"barcode", "title", "brand", "price", "updated_at"}),
 		}).Create(&products).Error
 
 		if err != nil {

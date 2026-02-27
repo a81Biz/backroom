@@ -28,18 +28,14 @@ func ScanItemHandler(w http.ResponseWriter, r *http.Request) {
 	var product models.Product
 	// Try to find by SKU OR Barcode
 	if err := db.DB.Where("sku = ? OR barcode = ?", payload.Code, payload.Code).First(&product).Error; err != nil {
-		// Product not found in DB - Create it dynamically for ad-hoc receiving
-		product = models.Product{
-			SKU:         payload.Code,
-			Barcode:     payload.Code,
-			Title:       "Ad-hoc Scanned " + payload.Code, // Placeholder title
-			Status:      models.StatusDraft,
-			StockOnHand: 0, // Will be incremented below
-		}
-		if err := db.DB.Create(&product).Error; err != nil {
-			http.Error(w, "Failed to dynamically create scanned product: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
+		// Product not found in DB - Do NOT create. Return error explicitly.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "not_found",
+			"message": "Product not found in inventory: " + payload.Code,
+		})
+		return
 	}
 
 	response := map[string]interface{}{

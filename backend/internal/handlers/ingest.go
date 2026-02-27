@@ -104,8 +104,20 @@ func ProcessManifestHandler(w http.ResponseWriter, r *http.Request) {
 
 	file, err := os.Open(manifestPath)
 	if err != nil {
-		log.Printf("Error opening manifest: %v", err)
-		http.Error(w, "Manifest not found", http.StatusNotFound)
+		// Check for progress file
+		progressPath := filepath.Join(sharedDir, "processed", "progress_"+filename+".json")
+		if pFile, pErr := os.Open(progressPath); pErr == nil {
+			defer pFile.Close()
+			var progress interface{}
+			if err := json.NewDecoder(pFile).Decode(&progress); err == nil {
+				w.WriteHeader(http.StatusAccepted)
+				json.NewEncoder(w).Encode(progress)
+				return
+			}
+		}
+
+		w.WriteHeader(http.StatusAccepted)
+		json.NewEncoder(w).Encode(map[string]interface{}{"status": "processing", "message": "Mining data..."})
 		return
 	}
 	defer file.Close()

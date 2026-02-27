@@ -103,6 +103,10 @@ detector = HybridDetector()
 excel_parser = ExcelIngestor()
 
 def process_pdf(file_path):
+    if not os.path.exists(file_path):
+        logging.warning(f"File vanished before processing: {file_path}")
+        return
+        
     logging.info(f"Processing PDF: {file_path}")
     try:
         filename = os.path.basename(file_path)
@@ -121,10 +125,19 @@ def process_pdf(file_path):
         
         manifest = []
         found_skus_set = set()
+        
+        # Write initial progress
+        progress_path = os.path.join(PROCESSED_DIR, f"progress_{filename}.json")
+        with open(progress_path, 'w') as f:
+            json.dump({"status": "processing", "current_page": 0, "total_pages": len(pages)}, f)
 
         for i, page in enumerate(pages):
             page_num = i + 1
             logging.info(f"Processing Page {page_num}/{len(pages)}...")
+            
+            # Update progress file per page
+            with open(progress_path, 'w') as f:
+                json.dump({"status": "processing", "current_page": page_num, "total_pages": len(pages)}, f)
             
             # 1. Detection (Visual)
             yolo_boxes = detector.detect_yolo(page)
@@ -268,6 +281,10 @@ def process_pdf(file_path):
         # Clean up sidecar
         if target_skus and os.path.exists(sidecar_path):
             os.remove(sidecar_path)
+
+        # Clean up progress file
+        if os.path.exists(progress_path):
+            os.remove(progress_path)
 
         # Move processed file to PROCESSED_DIR to prevent re-processing
         # Use shutil.move (ensure we import shutil)

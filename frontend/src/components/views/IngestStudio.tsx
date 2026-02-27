@@ -16,6 +16,7 @@ const IngestStudio = () => {
     const [currentStep, setCurrentStep] = useState<Step>(Step.SELECT_SUPPLIER);
     const [isCropModalOpen, setCropModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [progressDetails, setProgressDetails] = useState<{ current_page?: number, total_pages?: number, message?: string } | null>(null);
 
     // Data State
     const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -97,6 +98,7 @@ const IngestStudio = () => {
     const processPdfUpload = (file: File) => {
         if (!file) return;
         setIsProcessing(true);
+        setProgressDetails(null);
         const formData = new FormData();
         formData.append('file', file);
 
@@ -119,15 +121,22 @@ const IngestStudio = () => {
                     fetch(`/api/ingest/process?filename=${encodeURIComponent(file.name)}`, { method: 'POST' })
                         .then(async res => {
                             if (res.status === 404) return; // Wait
-                            clearInterval(checkStatus);
-                            return res.json();
-                        })
-                        .then(data => {
-                            if (data && data.status === 'preview') {
+                            const data = await res.json();
+
+                            // 202 Tracking vs 200 Final
+                            if (res.status === 200 && data.status === 'preview') {
+                                clearInterval(checkStatus);
                                 setProducts(data.products || []);
                                 setMissingSkus(data.missing_skus || []);
                                 setIsProcessing(false);
+                                setProgressDetails(null);
                                 setCurrentStep(Step.REVIEW);
+                            } else if (res.status === 202 || data.status === 'processing') {
+                                setProgressDetails({
+                                    current_page: data.current_page,
+                                    total_pages: data.total_pages,
+                                    message: data.message
+                                });
                             }
                         })
                         .catch(e => { if (!e.message.includes("404")) console.error(e) });
@@ -148,7 +157,13 @@ const IngestStudio = () => {
                 <div className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center">
                     <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary mb-4"></div>
                     <h2 className="text-xl font-bold text-white tracking-widest animate-pulse">MINING DATA...</h2>
-                    <p className="text-slate-400 text-sm mt-2">Please wait while we extract products</p>
+                    {progressDetails?.current_page && progressDetails?.total_pages ? (
+                        <p className="text-primary font-bold mt-2 text-lg">
+                            Processing Page {progressDetails.current_page} of {progressDetails.total_pages}
+                        </p>
+                    ) : (
+                        <p className="text-slate-400 text-sm mt-2">{progressDetails?.message || "Please wait while we extract products"}</p>
+                    )}
                 </div>
             )}
 

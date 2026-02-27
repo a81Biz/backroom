@@ -115,6 +115,18 @@ const MobileScanner: React.FC<MobileScannerProps> = ({ context_po_id, onClose })
                 setManualSku('');
 
                 setSuccessItem(newItem); // Automatically pop up the modal to pause scanning
+            } else if (res.status === 404 || data.status === 'not_found') {
+                const errorItem = {
+                    code: code,
+                    timestamp: new Date(),
+                    title: "Product Not Found",
+                    sku: "Unknown Barcode",
+                    image: "",
+                    status: 'error',
+                };
+                setScannedItems(prev => [errorItem, ...prev]);
+                setManualSku('');
+                setSuccessItem(errorItem);
             } else {
                 alert("Product not found: " + code);
             }
@@ -241,7 +253,11 @@ const MobileScanner: React.FC<MobileScannerProps> = ({ context_po_id, onClose })
                             scannedItems.map((item, idx) => (
                                 <div key={idx} className={`flex gap-3 p-3 rounded-xl border ${idx === 0 ? 'bg-slate-700/50 border-primary/50' : 'bg-slate-800/30 border-slate-700'} animate-fade-in`}>
                                     <div className="size-16 shrink-0 bg-slate-700 rounded-lg overflow-hidden border border-slate-600">
-                                        {item.image ? (
+                                        {item.status === 'error' ? (
+                                            <div className="w-full h-full flex items-center justify-center text-red-500 bg-red-500/10">
+                                                <span className="material-symbols-outlined text-2xl">error</span>
+                                            </div>
+                                        ) : item.image ? (
                                             <img src={item.image} className="w-full h-full object-contain" />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-slate-500">No Img</div>
@@ -266,6 +282,12 @@ const MobileScanner: React.FC<MobileScannerProps> = ({ context_po_id, onClose })
                                                         ({item.po_item.qty_received} / {item.po_item.qty_ordered})
                                                     </span>
                                                 )}
+                                            </div>
+                                        )}
+                                        {item.status === 'error' && (
+                                            <div className="flex items-center gap-1 text-red-500 font-bold text-[10px] mt-1">
+                                                <span className="material-symbols-outlined text-[14px] leading-none">cancel</span>
+                                                NOT FOUND
                                             </div>
                                         )}
                                     </div>
@@ -331,32 +353,45 @@ const MobileScanner: React.FC<MobileScannerProps> = ({ context_po_id, onClose })
                 </div>
             )}
 
-            {/* Success Paused Modal */}
+            {/* Success / Error Paused Modal */}
             {successItem && (
                 <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex flex-col justify-center items-center p-6">
-                    <div className="bg-[#182634] border border-emerald-500/50 w-full max-w-sm rounded-2xl shadow-2xl p-6 animate-fade-in relative flex flex-col items-center text-center">
-                        <div className="size-20 bg-emerald-500/20 rounded-full flex items-center justify-center mb-4 border border-emerald-500/30">
-                            <span className="material-symbols-outlined text-4xl text-emerald-400">check_circle</span>
+                    <div className={`bg-[#182634] border ${successItem.status === 'error' ? 'border-red-500/50' : 'border-emerald-500/50'} w-full max-w-sm rounded-2xl shadow-2xl p-6 animate-fade-in relative flex flex-col items-center text-center`}>
+                        <div className={`size-20 ${successItem.status === 'error' ? 'bg-red-500/20 border-red-500/30' : 'bg-emerald-500/20 border-emerald-500/30'} rounded-full flex items-center justify-center mb-4 border`}>
+                            <span className={`material-symbols-outlined text-4xl ${successItem.status === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
+                                {successItem.status === 'error' ? 'error' : 'check_circle'}
+                            </span>
                         </div>
-                        <h2 className="text-2xl font-bold text-white mb-2">Scan Successful</h2>
+                        <h2 className="text-2xl font-bold text-white mb-2">
+                            {successItem.status === 'error' ? 'Not Found' : 'Scan Successful'}
+                        </h2>
 
                         <div className="bg-slate-800/50 rounded-lg p-4 w-full mb-6 text-left border border-slate-700">
-                            <p className="text-sm text-white font-bold mb-1 line-clamp-2">{successItem.title}</p>
-                            <p className="text-xs text-slate-400 font-mono mb-2">{successItem.sku}</p>
-
-                            {successItem.po_item && (
-                                <div className="mt-2 text-sm bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
-                                    <span className="text-emerald-400 font-bold block mb-1">RECEIVED:</span>
-                                    <span className="text-white font-mono">{successItem.po_item.qty_received}</span>
-                                    <span className="text-slate-500 mx-1">/</span>
-                                    <span className="text-slate-400 font-mono">{successItem.po_item.qty_ordered} ordered</span>
+                            {successItem.status === 'error' ? (
+                                <div className="text-center text-red-400 text-sm font-bold">
+                                    <p>The scanned barcode does not exist in the inventory.</p>
+                                    <p className="font-mono mt-3 text-white bg-black/50 py-2 border border-ref-500/20 px-2 rounded">{successItem.code}</p>
                                 </div>
+                            ) : (
+                                <>
+                                    <p className="text-sm text-white font-bold mb-1 line-clamp-2">{successItem.title}</p>
+                                    <p className="text-xs text-slate-400 font-mono mb-2">{successItem.sku}</p>
+
+                                    {successItem.po_item && (
+                                        <div className="mt-2 text-sm bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
+                                            <span className="text-emerald-400 font-bold block mb-1">RECEIVED:</span>
+                                            <span className="text-white font-mono">{successItem.po_item.qty_received}</span>
+                                            <span className="text-slate-500 mx-1">/</span>
+                                            <span className="text-slate-400 font-mono">{successItem.po_item.qty_ordered} ordered</span>
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
 
                         <button
                             onClick={() => setSuccessItem(null)}
-                            className="w-full p-4 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all flex justify-center items-center gap-2"
+                            className={`w-full p-4 ${successItem.status === 'error' ? 'bg-slate-700 hover:bg-slate-600' : 'bg-emerald-500 hover:bg-emerald-600 shadow-[0_0_20px_rgba(16,185,129,0.3)]'} active:scale-95 text-white font-bold rounded-xl transition-all flex justify-center items-center gap-2`}
                         >
                             <span className="material-symbols-outlined text-[20px]">qr_code_scanner</span>
                             Continue Scanning

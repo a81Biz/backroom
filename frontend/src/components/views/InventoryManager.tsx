@@ -50,6 +50,10 @@ const InventoryManager = () => {
     const [sortColumn, setSortColumn] = useState<keyof Product | 'progress'>('title');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
+    // Order Items Sorting State
+    const [orderSortColumn, setOrderSortColumn] = useState<'sku' | 'ordered' | 'received' | 'missing' | 'status'>('sku');
+    const [orderSortDirection, setOrderSortDirection] = useState<'asc' | 'desc'>('asc');
+
     // Image Preview State
     const [previewImage, setPreviewImage] = useState<string | null>(null);
 
@@ -79,6 +83,50 @@ const InventoryManager = () => {
         if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
         return 0;
     });
+
+    const handleOrderSort = (column: 'sku' | 'ordered' | 'received' | 'missing' | 'status') => {
+        if (orderSortColumn === column) {
+            setOrderSortDirection(orderSortDirection === 'asc' ? 'desc' : 'asc');
+        } else {
+            setOrderSortColumn(column);
+            setOrderSortDirection('asc');
+        }
+    };
+
+    const sortedOrderItems = selectedOrder?.items ? [...selectedOrder.items].sort((a: any, b: any) => {
+        let valA: any;
+        let valB: any;
+
+        switch (orderSortColumn) {
+            case 'ordered':
+                valA = a.qty_ordered || 0;
+                valB = b.qty_ordered || 0;
+                break;
+            case 'received':
+                valA = a.qty_received || 0;
+                valB = b.qty_received || 0;
+                break;
+            case 'missing':
+                valA = (a.qty_ordered || 0) - (a.qty_received || 0);
+                valB = (b.qty_ordered || 0) - (b.qty_received || 0);
+                break;
+            case 'status':
+                const isCompleteA = (a.qty_received || 0) >= (a.qty_ordered || 0);
+                valA = a.status || (isCompleteA ? 'COMPLETED' : 'PENDING');
+                const isCompleteB = (b.qty_received || 0) >= (b.qty_ordered || 0);
+                valB = b.status || (isCompleteB ? 'COMPLETED' : 'PENDING');
+                break;
+            case 'sku':
+            default:
+                valA = a.sku || '';
+                valB = b.sku || '';
+                break;
+        }
+
+        if (valA < valB) return orderSortDirection === 'asc' ? -1 : 1;
+        if (valA > valB) return orderSortDirection === 'asc' ? 1 : -1;
+        return 0;
+    }) : [];
 
     useEffect(() => {
         if (activeTab === 'inventory') fetchInventory();
@@ -608,15 +656,30 @@ const InventoryManager = () => {
                                     <thead>
                                         <tr className="border-b border-white/10">
                                             <th className="pb-3 px-4 text-xs font-bold uppercase tracking-wider text-slate-500">Image</th>
-                                            <th className="pb-3 px-4 text-xs font-bold uppercase tracking-wider text-slate-500">Product / SKU</th>
-                                            <th className="pb-3 px-4 text-xs font-bold uppercase tracking-wider text-slate-500 text-right">Ordered</th>
-                                            <th className="pb-3 px-4 text-xs font-bold uppercase tracking-wider text-slate-500 text-right">Received</th>
-                                            <th className="pb-3 px-4 text-xs font-bold uppercase tracking-wider text-slate-500 text-right">Missing</th>
-                                            <th className="pb-3 px-4 text-xs font-bold uppercase tracking-wider text-slate-500 text-right">Status</th>
+                                            {[
+                                                { id: 'sku', label: 'Product / SKU' },
+                                                { id: 'ordered', label: 'Ordered', align: 'right' },
+                                                { id: 'received', label: 'Received', align: 'right' },
+                                                { id: 'missing', label: 'Missing', align: 'right' },
+                                                { id: 'status', label: 'Status', align: 'right' }
+                                            ].map((col) => (
+                                                <th
+                                                    key={col.id}
+                                                    className={`pb-3 px-4 text-xs font-bold uppercase tracking-wider text-slate-500 cursor-pointer hover:text-white transition-colors ${col.align === 'right' ? 'text-right' : ''}`}
+                                                    onClick={() => handleOrderSort(col.id as any)}
+                                                >
+                                                    <div className={`flex items-center gap-1 ${col.align === 'right' ? 'justify-end' : ''}`}>
+                                                        {col.label}
+                                                        {orderSortColumn === col.id && (
+                                                            <span className="text-primary">{orderSortDirection === 'asc' ? '↑' : '↓'}</span>
+                                                        )}
+                                                    </div>
+                                                </th>
+                                            ))}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/5">
-                                        {selectedOrder.items?.map((item: any, idx: number) => {
+                                        {sortedOrderItems.map((item: any, idx: number) => {
                                             const missingQty = item.qty_ordered - item.qty_received;
                                             const isComplete = item.qty_received >= item.qty_ordered;
                                             const imgUrl = item.product?.image_path ? getImageUrl(item.product.image_path) : null;
